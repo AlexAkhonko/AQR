@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aqr_db
+    username: postgres
+    password: shk38rus
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+qr:
+  size: 300
+  margin: 4
+  error-correction: HIGH
+
+image:
+  max-width: 800
+  max-height: 800
+  quality: 0.85
+  thumb:
+    width: 200
+    height: 200
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+  paths-to-match: /api/**
+  packages-to-scan: org.aqr.controller
+
+jwt:
+  secret: myJwtSecretKeyThatIsAtLeast32CharactersLong12345678
+  expiration-ms: 86400000  # 24 часа
+
