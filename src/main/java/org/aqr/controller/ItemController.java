@@ -4,13 +4,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.aqr.entity.Item;
 import org.aqr.entity.User;
 import org.aqr.service.ItemService;
 import org.aqr.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -73,8 +71,8 @@ public class ItemController {
 
     @GetMapping("/stats")
     public ResponseEntity<ItemService.ItemStats> getStats(Authentication auth) {
-        Long ownerId = Long.parseLong(auth.getName());
-        return ResponseEntity.ok(itemService.getStats(ownerId));
+        User user = userService.findByLogin(auth.getName());
+        return ResponseEntity.ok(itemService.getStats(user.getId()));
     }
 }
 

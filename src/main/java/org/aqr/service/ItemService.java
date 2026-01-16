@@ -1,7 +1,7 @@
 package org.aqr.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.aqr.entity.Item;
 import org.aqr.entity.User;
 import org.aqr.repository.ItemRepository;
@@ -13,7 +13,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 
 @Service
@@ -51,7 +50,7 @@ public class ItemService {
         }
 
         // Полнотекстовый поиск PostgreSQL ts_rank + LIMIT
-        return itemRepository.searchFullText(ownerId, cleanQuery);
+        return itemRepository.searchFullText(ownerId, query);
     }
 
     /**

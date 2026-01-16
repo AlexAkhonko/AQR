@@ -15,23 +15,25 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     // ✅ Простой поиск (2 параметра)
     @Query("SELECT i FROM Item i WHERE i.owner.id = :ownerId " +
             "AND LOWER(i.text) LIKE LOWER(:text) ORDER BY i.id DESC")
-    default List<Item> findByOwnerIdAndTextContainingIgnoreCase(
-            @Param("ownerId") Long ownerId, @Param("text") String text) {
-        return null;
-    }
+    List<Item> findByOwnerIdAndTextContainingIgnoreCase(
+            @Param("ownerId") Long ownerId, @Param("text") String text);
 
     // ✅ Последние N элементов владельца
     Page<Item> findByOwnerIdOrderByIdDesc(Long ownerId, Pageable pageable);
 
     // ✅ Полнотекстовый поиск PostgreSQL
     @Query(value = """
-        SELECT * FROM items i 
-        WHERE i.owner_id = :ownerId 
-        AND to_tsvector('russian', i.text) @@ plainto_tsquery('russian', :query)
-        ORDER BY ts_rank(to_tsvector('russian', i.text), plainto_tsquery('russian', :query)) DESC, i.id DESC
-        LIMIT 50
-        """, nativeQuery = true)
-    List<Item> searchFullText(@Param("ownerId") Long ownerId, @Param("text") String query);
+            SELECT * FROM items 
+            WHERE owner_id = :ownerId 
+            AND to_tsvector('russian', text) 
+            @@ plainto_tsquery('russian', :searchQuery)
+            ORDER BY ts_rank(
+                to_tsvector('russian', text), 
+                plainto_tsquery('russian', :searchQuery)
+            ) DESC
+            """, nativeQuery = true)
+    List<Item> searchFullText(@Param("ownerId") Long ownerId,
+                              @Param("searchQuery") String searchQuery);
 
     // Базовые запросы по владельцу
     List<Item> findByOwnerIdOrderByIdDesc(Long ownerId, PageRequest pageRequest);
@@ -39,10 +41,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     List<Item> findByOwnerIdOrderByTextAsc(Long ownerId);
 
     Page<Item> findByOwnerId(Long ownerId, Pageable pageable);  // ← Page + Pageable!
-
-    // Полнотекстовый поиск (PostgreSQL)
-//    @Query(value = "SELECT * FROM items WHERE owner_id = :ownerId AND to_tsvector('russian', text) @@ plainto_tsquery('russian', :search)", nativeQuery = true)
-//    List<Item> searchByOwnerFullText(@Param("ownerId") Long ownerId, @Param("search") String search);
 
     // Статистика по владельцу
     @Query("SELECT COUNT(i) FROM Item i WHERE i.owner.id = :ownerId")
