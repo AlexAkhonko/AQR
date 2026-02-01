@@ -9,19 +9,67 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+/**
+ * Репозиторий для работы с сущностью Item.
+ * Предоставляет методы для поиска, фильтрации и статистики по элементам.
+ *
+ * Основные функции:
+ * - Поиск элементов по владельцу с различными условиями
+ * - Полнотекстовый поиск по содержимому текста
+ * - Пагинация и сортировка
+ * - Статистические запросы
+ */
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
-    // ✅ Простой поиск (2 параметра)
+    // =============================================
+    // БАЗОВЫЕ ЗАПРОСЫ ПО ВЛАДЕЛЬЦУ
+    // =============================================
+
+    /**
+     * Находит все элементы указанного владельца с пагинацией.
+     *
+     * @param ownerId идентификатор владельца
+     * @param pageable параметры пагинации и сортировки
+     * @return страница с элементами
+     */
+    Page<Item> findByOwnerId(Long ownerId, Pageable pageable);
+
+    /**
+     * Находит все элементы указанного владельца, отсортированные по ID в порядке убывания.
+     *
+     * @param ownerId идентификатор владельца
+     * @param pageRequest параметры пагинации
+     * @return список элементов
+     */
+    List<Item> findByOwnerIdOrderByIdDesc(Long ownerId, PageRequest pageRequest);
+
+    // =============================================
+    // ПОИСК ПО СОДЕРЖИМОМУ
+    // =============================================
+
+    /**
+     * Простой поиск элементов по владельцу и тексту (регистронезависимый).
+     * Использует LIKE с точным совпадением по переданному тексту.
+     *
+     * @param ownerId идентификатор владельца
+     * @param text текст для поиска (должен содержать символы % для шаблона)
+     * @return список элементов, отсортированных по ID в порядке убывания
+     */
     @Query("SELECT i FROM Item i WHERE i.owner.id = :ownerId " +
             "AND LOWER(i.text) LIKE LOWER(:text) ORDER BY i.id DESC")
-    List<Item> findByOwnerIdAndTextContainingIgnoreCase(
-            @Param("ownerId") Long ownerId, @Param("text") String text);
+    List<Item> findByOwnerIdAndTextLikeIgnoreCase(
+            @Param("ownerId") Long ownerId,
+            @Param("text") String text);
 
-    // ✅ Последние N элементов владельца
-    Page<Item> findByOwnerIdOrderByIdDesc(Long ownerId, Pageable pageable);
-
-    // ✅ Полнотекстовый поиск PostgreSQL
+    /**
+     * Полнотекстовый поиск с использованием PostgreSQL tsvector/tsquery.
+     * Поиск учитывает морфологию русского языка и ранжирует результаты по релевантности.
+     *
+     * @param ownerId идентификатор владельца
+     * @param searchQuery поисковый запрос
+     * @return список элементов, отсортированных по релевантности (от высокой к низкой)
+     */
     @Query(value = """
             SELECT * FROM items 
             WHERE owner_id = :ownerId 
@@ -32,22 +80,32 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                 plainto_tsquery('russian', :searchQuery)
             ) DESC
             """, nativeQuery = true)
-    List<Item> searchFullText(@Param("ownerId") Long ownerId,
-                              @Param("searchQuery") String searchQuery);
+    List<Item> searchFullText(
+            @Param("ownerId") Long ownerId,
+            @Param("searchQuery") String searchQuery);
 
-    // Базовые запросы по владельцу
-    List<Item> findByOwnerIdOrderByIdDesc(Long ownerId, PageRequest pageRequest);
+    // =============================================
+    // СПЕЦИАЛЬНЫЕ ЗАПРОСЫ
+    // =============================================
 
-    List<Item> findByOwnerIdOrderByTextAsc(Long ownerId);
-
-    Page<Item> findByOwnerId(Long ownerId, Pageable pageable);  // ← Page + Pageable!
-
-    // Статистика по владельцу
-    @Query("SELECT COUNT(i) FROM Item i WHERE i.owner.id = :ownerId")
-    Long countByOwnerId(@Param("ownerId") Long ownerId);
-
-    // Последние N предметов
+    /**
+     * Находит последние 10 элементов владельца, отсортированных по ID в порядке убывания.
+     *
+     * @param ownerId идентификатор владельца
+     * @return список из не более чем 10 последних элементов
+     */
     List<Item> findTop10ByOwnerIdOrderByIdDesc(Long ownerId);
 
-    List<Item> findByOwnerIdAndTextContainingIgnoreCaseAndIdOrderByIdDesc(Long ownerId, String text, Long id, Sort sort, Limit limit);
+    // =============================================
+    // СТАТИСТИЧЕСКИЕ ЗАПРОСЫ
+    // =============================================
+
+    /**
+     * Подсчитывает количество элементов у указанного владельца.
+     *
+     * @param ownerId идентификатор владельца
+     * @return количество элементов
+     */
+    @Query("SELECT COUNT(i) FROM Item i WHERE i.owner.id = :ownerId")
+    Long countByOwnerId(@Param("ownerId") Long ownerId);
 }

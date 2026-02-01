@@ -63,8 +63,6 @@ public class AuthController {
         } catch (AuthenticationException e) {
             throw new RuntimeException(e);
         }
-
-        //SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }
 

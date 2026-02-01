@@ -36,8 +36,7 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> {
-            // Замените на ваш UserService.findByLogin(username)
-            org.aqr.entity.User user = userService.findByLogin(username);
+            org.aqr.entity.User user = userService.findByLogin(username);  // ✅ Ваша реализация
             return org.springframework.security.core.userdetails.User.builder()
                     .username(user.getLogin())
                     .password(user.getPassword())
@@ -47,9 +46,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public DaoAuthenticationProvider daoAuthProvider(UserDetailsService uds, PasswordEncoder pe) {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(uds);
-        provider.setPasswordEncoder(pe);
+    public DaoAuthenticationProvider daoAuthProvider() {  // ✅ Без параметров!
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService());  // ✅ setUserDetailsService
+        provider.setPasswordEncoder(passwordEncoder());        // ✅ setPasswordEncoder
         return provider;
     }
 
@@ -59,10 +59,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, DaoAuthenticationProvider daoAuthProvider) throws Exception {
-        http.csrf(csrf -> csrf.disable())
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {  // ✅ Без параметров!
+        return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(daoAuthProvider)
+                .authenticationProvider(daoAuthProvider())  // ✅ Spring инжектит
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/**").permitAll()
 //                                .requestMatchers("/swagger-ui/**", "/swagger-ui.html").permitAll()
@@ -70,8 +70,7 @@ public class SecurityConfig {
 //                                .requestMatchers("/api/v1/auth/**").permitAll()
 //                       .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
     }
 }

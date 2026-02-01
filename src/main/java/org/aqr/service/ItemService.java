@@ -42,7 +42,7 @@ public class ItemService {
         String cleanQuery = query.trim().toLowerCase();
 
         // Сначала простой поиск (LIKE %query%)
-        List<Item> simpleResults = itemRepository.findByOwnerIdAndTextContainingIgnoreCase(
+        List<Item> simpleResults = itemRepository.findByOwnerIdAndTextLikeIgnoreCase(
                 ownerId, "%" + cleanQuery + "%");
 
         if (!simpleResults.isEmpty()) {
