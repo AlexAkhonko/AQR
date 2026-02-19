@@ -2,8 +2,6 @@ package org.aqr.controller;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.aqr.entity.Item;
 import org.aqr.entity.User;
@@ -43,22 +41,22 @@ public class ItemController {
         return ResponseEntity.ok(itemService.searchItems(user.getId(), q));
     }
 
-    @PostMapping
-    public ResponseEntity<Item> createItem(
-            Authentication auth,
-            @RequestBody @Valid CreateItemRequest request) {
-        User user = userService.findByLogin(auth.getName());
-        return ResponseEntity.ok(itemService.createItem(user.getId(), request.text()));
-    }
+//    @PostMapping
+//    public ResponseEntity<Item> createItem(
+//            Authentication auth,
+//            @RequestBody @Valid CreateItemRequest request) {
+//        User user = userService.findByLogin(auth.getName());
+//        return ResponseEntity.ok(itemService.createItem(user.getId(), request.text()));
+//    }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Item> updateItem(
-            Authentication auth,
-            @PathVariable Long id,
-            @RequestBody @Valid CreateItemRequest request) {
-        User user = userService.findByLogin(auth.getName());
-        return ResponseEntity.ok(itemService.updateItem(user.getId(), id, request.text()));
-    }
+//    @PutMapping("/{id}")
+//    public ResponseEntity<Item> updateItem(
+//            Authentication auth,
+//            @PathVariable Long id,
+//            @RequestBody @Valid CreateItemRequest request) {
+//        User user = userService.findByLogin(auth.getName());
+//        return ResponseEntity.ok(itemService.updateItem(user.getId(), id, request.text()));
+//    }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteItem(
@@ -68,12 +66,6 @@ public class ItemController {
         itemService.deleteItem(user.getId(), id);
         return ResponseEntity.noContent().build();
     }
-
-    @GetMapping("/stats")
-    public ResponseEntity<ItemService.ItemStats> getStats(Authentication auth) {
-        User user = userService.findByLogin(auth.getName());
-        return ResponseEntity.ok(itemService.getStats(user.getId()));
-    }
 }
 
-record CreateItemRequest(@NotBlank String text) {}
+//record CreateItemRequest(@NotBlank String text) {}

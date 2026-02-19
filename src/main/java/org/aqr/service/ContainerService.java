@@ -2,24 +2,36 @@ package org.aqr.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.aqr.dto.Breadcrumb;
+import org.aqr.dto.ContainerListPage;
 import org.aqr.dto.ContainerOption;
 import org.aqr.entity.Container;
+import org.aqr.entity.Item;
 import org.aqr.entity.User;
 import org.aqr.repository.ContainerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.aqr.utils.ImageUtil;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.util.*;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ContainerService {
 
-    @Autowired
-    private ContainerRepository containerRepository;
+    private final ContainerRepository containerRepository;
+    private final QrCodeService qrCodeService;
+    private final StorageService storageService;
+    private final BreadcrumbService breadcrumbService;
+    private final ItemService itemService;
+    private final UserService userService;
 
     public List<Container> findByOwnerId(Long ownerId) {
         return containerRepository.findByOwnerId(ownerId);
@@ -29,6 +41,7 @@ public class ContainerService {
         return containerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Container not found"));
     }
+
     public Container findByIdAndOwnerId(Long id, Long userId) {
         return containerRepository.findByIdAndOwnerId(id, userId);
     }
@@ -41,19 +54,8 @@ public class ContainerService {
         return containerRepository.findRootContainerByOwnerId(ownerId);
     }
 
-    public List<Container> findChildren(Long parentId, Long ownerId) {
+    public List<Container> findChildrenByParentIdAndOwner(Long parentId, Long ownerId) {
         return containerRepository.findChildrenByParentIdAndOwner(parentId, ownerId);
-    }
-
-    public int getChildCount(Long parentId, Long ownerId)  // количество дочерних контейнеров
-    {
-        return findChildren(parentId, ownerId).size();
-    }
-
-    public int getItemCount(Long id)   // количество айтемов внутри
-    {
-
-        return 0;
     }
 
     public List<ContainerOption> buildOptionsForOwner(User owner) {
@@ -123,6 +125,93 @@ public class ContainerService {
             for (Long ch : childrenIds.getOrDefault(id, List.of())) stack.push(ch);
         }
         return out;
+    }
+
+    @Transactional
+    public void createContainerWithItems(User user,
+                                         String name,
+                                         String contents,
+                                         MultipartFile photo,
+                                         Long parentId,
+                                         int cropX,
+                                         int cropY,
+                                         int cropS) throws Exception {
+
+        if (photo == null || photo.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "photo is required");
+        }
+
+        // 1) создаём контейнер и сохраняем, чтобы получить id
+        Container container = new Container();
+        container.setOwner(user);
+        container.setName(name);
+
+        // parent (owner-check)
+        if (parentId != null) {
+            Container parent = findByIdAndOwnerId(parentId, user.getId());
+            container.setParent(parent);
+        }
+
+        // qr_code: ретраи при коллизии (предполагается unique constraint)
+        for (int attempt = 0; attempt < 10; attempt++) {
+            container.setQrCode(qrCodeService.newCode5());
+            try {
+                container = containerRepository.save(container); // id появится здесь
+                break;
+            } catch (DataIntegrityViolationException e) {
+                if (attempt == 9) throw e;
+            }
+        }
+
+        // 2) обработка изображения
+        BufferedImage src = ImageIO.read(photo.getInputStream());
+        if (src == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported image format");
+        }
+        src = ImageUtil.toRgb(src);
+
+        // 3) имя файла (id уже есть)
+        String baseName = "c_" + container.getId() + "_" + UUID.randomUUID().toString().substring(0, 8) + ".jpg";
+
+        // 4) original
+        BufferedImage normalized = ImageUtil.resizeMax(src, 1920);
+        storageService.writeJpeg(normalized, storageService.originalPath(container.getId(), baseName), 0.82f);
+
+        // 5) square/min
+        BufferedImage squareCrop = ImageUtil.cropSquareSafe(src, cropX, cropY, cropS);
+        BufferedImage square512 = ImageUtil.resizeSquare(ImageUtil.toRgb(squareCrop), 512);
+        storageService.writeJpeg(square512, storageService.squarePath(container.getId(), baseName), 0.80f);
+
+        // 6) сохраняем image в БД
+        container.setImage(baseName);
+        containerRepository.save(container);
+
+        // 7) создаём items из contents
+        for (String line : contents.split("\\R")) {
+            String itemName = line.trim();
+            if (itemName.isEmpty()) continue;
+
+            Item item = new Item();
+            item.setOwner(user);
+            item.setContainer(container);
+            item.setText(itemName);
+
+            itemService.save(item);
+        }
+    }
+
+    @Transactional
+    public ContainerListPage buildContainerContentsPage(String login, Long parentId) {
+        Long userId = userService.findByLogin(login).getId();
+
+        // owner-check: parentId должен принадлежать пользователю (иначе можно смотреть чужие контейнеры)
+        //requireOwned(parentId, userId);
+
+        List<Container> childContainers = findChildrenByParentIdAndOwner(parentId, userId);
+        List<Item> items = itemService.findByContainerIdAndOwnerId(parentId, userId);
+        List<Breadcrumb> breadcrumbs = breadcrumbService.buildBreadcrumbs(findById(parentId));
+
+        return new ContainerListPage(userId, parentId, childContainers, items, breadcrumbs);
     }
 
 //    @Transactional

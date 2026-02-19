@@ -2,24 +2,19 @@ package org.aqr.controller.ui;
 
 import lombok.RequiredArgsConstructor;
 import org.aqr.dto.Breadcrumb;
+import org.aqr.dto.ContainerListPage;
 import org.aqr.entity.Container;
-import org.aqr.entity.Item;
 import org.aqr.entity.User;
-import org.aqr.service.*;
-import org.aqr.utils.ImageUtil;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
+import org.aqr.service.ContainerService;
+import org.aqr.service.UserService;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.util.*;
+import java.util.List;
 
 @Controller
 @RequiredArgsConstructor
@@ -27,10 +22,7 @@ import java.util.*;
 public class ContainersController {
 
     private final ContainerService containerService;
-    private final ItemService itemService;
     private final UserService userService;
-    private final QrCodeService qrCodeService;
-    private final StorageService storageService;
 
     @GetMapping
     public String rootContainers(Authentication auth, Model model) {
@@ -41,7 +33,7 @@ public class ContainersController {
         List<Breadcrumb> breadcrumbs = List.of(new Breadcrumb("Мои контейнеры", "", true));
 
         model.addAttribute("containers", rootContainers);
-        model.addAttribute("items", List.of()); // нет айтемов на корне
+        model.addAttribute("items", List.of());
         model.addAttribute("breadcrumbs", breadcrumbs);
         model.addAttribute("parentId", null);
         model.addAttribute("userId", userId);
@@ -53,53 +45,15 @@ public class ContainersController {
     public String containerContents(@PathVariable Long parentId,
                                     Authentication auth,
                                     Model model) {
-        String login = auth.getName();
-        Long userId = userService.findByLogin(login).getId();
+        ContainerListPage page = containerService.buildContainerContentsPage(auth.getName(), parentId);
 
-        List<Container> childContainers = containerService.findChildren(parentId, userId);
-        List<Item> items = itemService.findByContainerId(parentId);
-
-        List<Breadcrumb> breadcrumbs = buildBreadcrumbs(parentId);
-
-        model.addAttribute("containers", childContainers);
-        model.addAttribute("items", items);
-        model.addAttribute("breadcrumbs", breadcrumbs);
-        model.addAttribute("parentId", parentId);
-        model.addAttribute("userId", userId);
+        model.addAttribute("containers", page.containers());
+        model.addAttribute("items", page.items());
+        model.addAttribute("breadcrumbs", page.breadcrumbs());
+        model.addAttribute("parentId", page.parentId());
+        model.addAttribute("userId", page.userId());
 
         return "containers/container_list";
-    }
-
-    private List<Breadcrumb> buildBreadcrumbs(Long currentId) {
-        // Идём от текущего контейнера вверх по parent до корня, потом разворачиваем список. [web:417]
-        List<Breadcrumb> crumbs = new ArrayList<>();
-        crumbs.add(new Breadcrumb("Мои контейнеры", "/containers", false));
-
-        if (currentId == null) {
-            return crumbs;
-        }
-
-        // защита от циклов/битых данных: guard + visited. [web:258]
-        Set<Long> visited = new HashSet<>();
-        Deque<Container> stack = new ArrayDeque<>();
-
-        Container cur = containerService.findById(currentId); // или repo.findById(...)
-        int guard = 0;
-
-        while (cur != null && cur.getId() != null && guard++ < 1000) {
-            if (!visited.add(cur.getId())) break; // цикл
-            stack.push(cur); // чтобы потом вывести от корня к листу
-            cur = cur.getParent(); // LAZY ок, но должен быть open-session-in-view или transactional
-        }
-
-        while (!stack.isEmpty()) {
-            Container c = stack.pop();
-            boolean isLast = stack.isEmpty();
-            String url = isLast ? "" : ("/containers/" + c.getId()); // подстрой под твой роут просмотра контейнера
-            crumbs.add(new Breadcrumb(c.getName(), url, isLast));
-        }
-
-        return crumbs;
     }
 
     @GetMapping("/new")
@@ -122,67 +76,14 @@ public class ContainersController {
 
         User user = userService.findByLogin(auth.getName());
 
-        if (photo == null || photo.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "photo is required");
-        }
-
-        // 1) создаём контейнер (чтобы получить id)
-        Container container = new Container();
-        container.setOwner(user);
-        container.setName(name);
-
-        // qr: ретраи на случай коллизии по (owner_id, qr_code)
-        for (int attempt = 0; attempt < 10; attempt++) {
-            container.setQrCode(qrCodeService.newCode5());
-            try {
-                container = containerService.save(container); // важно: чтобы id появился
-                break;
-            } catch (DataIntegrityViolationException e) {
-                if (attempt == 9) throw e;
-            }
-        }
-
-        // 2) читаем изображение
-        BufferedImage src = ImageIO.read(photo.getInputStream());
-        if (src == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported image format");
-        }
-        src = ImageUtil.toRgb(src);
-
-        // 3) формируем имена файлов (теперь id точно есть)
-        String baseName = "c_" + container.getId() + "_" + UUID.randomUUID().toString().substring(0, 8) + ".jpg";
-
-        // 4) сохраняем "original" в нормальном размере/весе
-        BufferedImage normalized = ImageUtil.resizeMax(src, 1920);
-        storageService.writeJpeg(normalized, storageService.originalPath(container.getId(), baseName), 0.82f);
-
-        // 5) square/min по кропу пользователя (кроп в координатах ИСХОДНОГО src)
-        BufferedImage squareCrop = ImageUtil.cropSquareSafe(src, cropX, cropY, cropS);
-        BufferedImage square512 = ImageUtil.resizeSquare(ImageUtil.toRgb(squareCrop), 512);
-        storageService.writeJpeg(square512, storageService.squarePath(container.getId(), baseName), 0.80f);
-
-        // 6) обновляем container.image
-        container.setImage(baseName);
-
-        if (parentId != null) {
-            Container parent = containerService.findByIdAndOwnerId(parentId, user.getId()); // важно: owner-check
-            container.setParent(parent);
-        }
-
-        containerService.save(container);
-
-
-
-        // 4) items из contents (по строкам)
-        for (String line : contents.split("\\R")) {
-            String itemName = line.trim();
-            if (itemName.isEmpty()) continue;
-            Item item = new Item();
-            item.setOwner(user);
-            item.setContainer(container);
-            item.setText(itemName);
-            itemService.save(item);
-        }
+        containerService.createContainerWithItems(
+                user,
+                name,
+                contents,
+                photo,
+                parentId,
+                cropX, cropY, cropS
+        );
 
         return "redirect:/dashboard";
     }
