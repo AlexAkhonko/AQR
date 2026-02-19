@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Меню - AQR</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; }
+    .menu { display: flex; flex-direction: column; gap: 20px; }
+    .btn {
+      display: block;
+      padding: 15px 30px;
+      text-decoration: none;
+      background: #007bff;
+      color: white;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 18px;
+      transition: background 0.3s;
+    }
+    .btn:hover { background: #0056b3; }
+    .btn-secondary { background: #6c757d; }
+    .btn-secondary:hover { background: #545b62; }
+    .user-info { margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+  </style>
+</head>
+<body>
+<div class="user-info">
+  <h1>Привет, <span th:text="${login}"></span>!</h1>
+  <p>Выберите действие:</p>
+</div>
+
+<div class="menu">
+  <a th:href="@{/containers/new}" class="btn" >Новый контейнер</a>
+  <a th:href="@{/scan}" class="btn">🔍 Визор QR</a>
+  <a th:href="@{/containers}" class="btn">📦 Мои контейнеры</a>
+  <a th:href="@{/items}" class="btn">📝 Мои вещи</a>
+  <a th:href="@{/scan}" class="btn">🔍 Сканировать QR</a>
+  <a th:href="@{/profile}" class="btn secondary">👤 Профиль</a>
+
+  <form th:action="@{/logout}" method="post" style="display: inline-block;">
+    <button type="submit" class="btn btn-secondary">🚪 Выйти</button>
+  </form>
+</div>
+</body>
+</html>

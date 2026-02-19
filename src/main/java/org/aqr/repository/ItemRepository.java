@@ -35,6 +35,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
      */
     Page<Item> findByOwnerId(Long ownerId, Pageable pageable);
 
+    List<Item> findByOwnerId(Long ownerId);
+
     /**
      * Находит все элементы указанного владельца, отсортированные по ID в порядке убывания.
      *
@@ -108,4 +110,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
      */
     @Query("SELECT COUNT(i) FROM Item i WHERE i.owner.id = :ownerId")
     Long countByOwnerId(@Param("ownerId") Long ownerId);
+
+    List<Item> findByContainerId(Long containerId);
 }

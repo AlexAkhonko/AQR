@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><!DOCTYPE html>
+        <html lang="ru">
+        <head>
+        <meta charset="UTF-8" />
+        <title>Multi QR AR Overlay - Images</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #111; color: #fff; }
+        #wrap { position: relative; max-width: 100vw; max-height: 100vh; overflow: hidden; }
+        video {
+            width: 100vw;
+            height: auto;
+            display: block;
+        }
+        #overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        .box {
+            position: absolute;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 10px #0f0;
+        }
+        .image-overlay {
+            position: absolute;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 15px #0f0;
+            overflow: hidden;
+            /* ТОЧНО по центру QR, без сдвига */
+            transform: translate(-50%, -50%);
+        }
+        .image-overlay img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #list {
+            padding: 8px;
+            font-size: 14px;
+            background: rgba(0,0,0,0.8);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #status { font-size: 12px; opacity: 0.7; }
+        button {
+            margin: 4px;
+            padding: 6px 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div id="wrap">
+    <video id="video" autoplay playsinline></video>
+    <div id="overlay"></div>
+</div>
+
+<div id="list">
+    <div id="status">Загрузка картинок…</div>
+    <div id="results"></div>
+    <button id="startBtn">Старт</button>
+    <button id="stopBtn" disabled>Стоп</button>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    let stream = null;
+    let running = false;
+    let detector = null;
+    let images = {};
+
+    const imageFiles = {
+        'car': 'car.png',
+        'home': 'home1.png',
+        'phot': 'phot.png',
+        'red': 'red.jpg',
+        'tuf': 'tuf.jpg',
+        'win': 'win.jpg'
+    };
+
+    async function preloadImages() {
+        statusEl.textContent = 'Предзагрузка картинок…';
+        for (const [key, filename] of Object.entries(imageFiles)) {
+            try {
+                const img = new Image();
+                img.src = filename;
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => {
+                        console.warn(`Не удалось загрузить ${filename}`);
+                        resolve();
+                    };
+                });
+                images[key] = img;
+            } catch (e) {
+                console.error(`Ошибка загрузки ${filename}:`, e);
+            }
+        }
+        statusEl.textContent = `${Object.keys(images).length}/6 картинок загружено. Жми Старт.`;
+    }
+
+    function getImageForQR(rawValue) {
+        const prefix = rawValue.substring(0, 6).toLowerCase();
+        for (const [key, img] of Object.entries(images)) {
+            if (prefix.startsWith(key)) {
+                return img;
+            }
+        }
+        return null;
+    }
+
+    async function initDetector() {
+        if ('BarcodeDetector' in window) {
+            const formats = await BarcodeDetector.getSupportedFormats();
+            detector = new BarcodeDetector({ formats: formats.includes('qr_code') ? ['qr_code'] : formats });
+        } else {
+            statusEl.textContent = 'BarcodeDetector не поддерживается.';
+            return;
+        }
+        await preloadImages();
+    }
+
+    async function start() {
+        if (!detector) {
+            alert('BarcodeDetector недоступен.');
+            return;
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }
+            });
+            video.srcObject = stream;
+            running = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            statusEl.textContent = 'Сканирование… QR: car/home/phot/red/tuf/win';
+            requestAnimationFrame(loop);
+        } catch (e) {
+            console.error(e);
+            statusEl.textContent = 'Ошибка камеры: ' + e.message;
+        }
+    }
+
+    function stop() {
+        running = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+        }
+        video.srcObject = null;
+        clearOverlay();
+    }
+
+    function clearOverlay() {
+        overlay.innerHTML = '';
+    }
+
+    function drawOverlay(barcodes) {
+        clearOverlay();
+        const rect = video.getBoundingClientRect();
+        const scaleX = rect.width / video.videoWidth;
+        const scaleY = rect.height / video.videoHeight;
+
+        barcodes.forEach(code => {
+            const { x, y, width, height } = code.boundingBox;
+            const rawValue = code.rawValue;
+
+            // Рамка QR (остаётся для навигации)
+            const box = document.createElement('div');
+            box.className = 'box';
+            box.style.left = (x * scaleX) + 'px';
+            box.style.top = (y * scaleY) + 'px';
+            box.style.width = (width * scaleX) + 'px';
+            box.style.height = (height * scaleY) + 'px';
+            overlay.appendChild(box);
+
+            // Картинка ТОЧНО вместо QR
+            const imgElement = getImageForQR(rawValue);
+            if (imgElement) {
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'image-overlay';
+
+                // РАЗМЕР ТОЧНО как у QR
+                imageDiv.style.width = (width * scaleX) + 'px';
+                imageDiv.style.height = (height * scaleY) + 'px';
+
+                // ПОЗИЦИЯ ТОЧНО центр QR
+                const centerX = (x + width / 2) * scaleX;
+                const centerY = (y + height / 2) * scaleY;
+                imageDiv.style.left = centerX + 'px';
+                imageDiv.style.top = centerY + 'px';
+
+                const img = document.createElement('img');
+                img.src = imgElement.src;
+                imageDiv.appendChild(img);
+                overlay.appendChild(imageDiv);
+            }
+        });
+    }
+
+    async function loop() {
+        if (!running || video.readyState !== video.HAVE_ENOUGH_DATA) {
+            if (running) requestAnimationFrame(loop);
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+
+        try {
+            const barcodes = await detector.detect(canvas);
+            if (barcodes.length > 0) {
+                drawOverlay(barcodes);
+                const items = barcodes.map((b, i) => {
+                    const imgName = getImageForQR(b.rawValue)?.src.split('/').pop() || 'нет';
+                    return `${i + 1}. ${b.rawValue.substring(0, 20)}... → ${imgName}`;
+                });
+                resultsEl.innerHTML = `<strong>Найдено: ${barcodes.length}</strong><br>${items.join('<br>')}`;
+            } else {
+                clearOverlay();
+                resultsEl.textContent = 'Коды не найдены.';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
+        if (running) requestAnimationFrame(loop);
+    }
+
+    startBtn.addEventListener('click', start);
+    stopBtn.addEventListener('click', stop);
+
+    initDetector();
+</script>
+</body>
+</html>
+

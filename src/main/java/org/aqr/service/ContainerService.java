@@ -2,13 +2,17 @@ package org.aqr.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import org.aqr.dto.ContainerOption;
 import org.aqr.entity.Container;
+import org.aqr.entity.User;
 import org.aqr.repository.ContainerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.file.AccessDeniedException;
-import java.util.List;
+import java.util.*;
 
 @Service
 @Transactional
@@ -17,18 +21,169 @@ public class ContainerService {
     @Autowired
     private ContainerRepository containerRepository;
 
-//    public List<Container> findByOwnerId(Long ownerId) {
-//        return containerRepository.findByOwnerId(ownerId);
-//    }
+    public List<Container> findByOwnerId(Long ownerId) {
+        return containerRepository.findByOwnerId(ownerId);
+    }
 
     public Container findById(Long id) {
         return containerRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Container not found"));
     }
+    public Container findByIdAndOwnerId(Long id, Long userId) {
+        return containerRepository.findByIdAndOwnerId(id, userId);
+    }
 
     public Container save(Container container) {
         return containerRepository.save(container);
     }
+
+    public List<Container> findRootContainersByOwner(Long ownerId) {
+        return containerRepository.findRootContainerByOwnerId(ownerId);
+    }
+
+    public List<Container> findChildren(Long parentId, Long ownerId) {
+        return containerRepository.findChildrenByParentIdAndOwner(parentId, ownerId);
+    }
+
+    public int getChildCount(Long parentId, Long ownerId)  // количество дочерних контейнеров
+    {
+        return findChildren(parentId, ownerId).size();
+    }
+
+    public int getItemCount(Long id)   // количество айтемов внутри
+    {
+
+        return 0;
+    }
+
+    public List<ContainerOption> buildOptionsForOwner(User owner) {
+        List<Container> containerList = containerRepository.findByOwnerId(owner.getId());
+
+        Map<Long, List<Container>> children = new HashMap<>();
+        for (Container c : containerList) {
+            Long pid = (c.getParent() == null) ? null : c.getParent().getId();
+            children.computeIfAbsent(pid, k -> new ArrayList<>()).add(c);
+        }
+        // сортировка по имени внутри уровня (по желанию)
+        children.values().forEach(list -> list.sort(Comparator.comparing(Container::getName, String.CASE_INSENSITIVE_ORDER)));
+
+        List<ContainerOption> out = new ArrayList<>();
+        dfs(null, 0, children, out);
+        return out;
+    }
+
+    private void dfs(Long parentId, int level,
+                     Map<Long, List<Container>> children,
+                     List<ContainerOption> out) {
+
+        for (Container c : children.getOrDefault(parentId, List.of())) {
+            String indent = "—".repeat(level) + (level > 0 ? " " : "");
+            out.add(new ContainerOption(c.getId(), indent + c.getName(), level));
+            dfs(c.getId(), level + 1, children, out);
+        }
+    }
+
+    public List<ContainerOption> buildOptionsExcludingSubtree(User owner, Long excludeRootId) {
+        List<Container> all = containerRepository.findByOwnerId(owner.getId());
+
+        // 1) Соберём set всех исключаемых id (excludeRoot + все потомки)
+        Set<Long> excluded = collectSubtreeIds(all, excludeRootId);
+
+        // 2) children map
+        Map<Long, List<Container>> children = new HashMap<>();
+        for (Container c : all) {
+            if (excluded.contains(c.getId())) continue; // вырезаем из списка
+            Long pid = (c.getParent() == null) ? null : c.getParent().getId();
+            // если parent исключён, этот узел всё равно исключится через subtreeIds, но на всякий:
+            if (pid != null && excluded.contains(pid)) continue;
+            children.computeIfAbsent(pid, k -> new ArrayList<>()).add(c);
+        }
+        children.values().forEach(list -> list.sort(Comparator.comparing(Container::getName, String.CASE_INSENSITIVE_ORDER)));
+
+        // 3) DFS → плоский список
+        List<ContainerOption> out = new ArrayList<>();
+        dfs(null, 0, children, out);
+        return out;
+    }
+
+    private Set<Long> collectSubtreeIds(List<Container> all, Long rootId) {
+        Map<Long, List<Long>> childrenIds = new HashMap<>();
+        for (Container c : all) {
+            Long pid = (c.getParent() == null) ? null : c.getParent().getId();
+            childrenIds.computeIfAbsent(pid, k -> new ArrayList<>()).add(c.getId());
+        }
+
+        Set<Long> out = new HashSet<>();
+        Deque<Long> stack = new ArrayDeque<>();
+        stack.push(rootId);
+
+        while (!stack.isEmpty()) {
+            Long id = stack.pop();
+            if (!out.add(id)) continue;
+            for (Long ch : childrenIds.getOrDefault(id, List.of())) stack.push(ch);
+        }
+        return out;
+    }
+
+//    @Transactional
+//    public void updateContainer(User user, Long id, String name, Long parentId,
+//                                MultipartFile photo, Integer cropX, Integer cropY, Integer cropS) throws Exception {
+//        Container c = findById(id);
+//        c.setName(name);
+//
+//        Container newParent = null;
+//        if (parentId != null) {
+//            newParent = findByIdOwned(parentId, user);
+//        }
+//
+//        if (newParent != null && newParent.getId().equals(c.getId())) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Container cannot be its own parent");
+//        }
+//        if (newParent != null && wouldCreateCycle(c.getId(), newParent.getId(), user)) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parent cannot be a descendant");
+//        }
+//        c.setParent(newParent);
+//
+//        // Фото/кроп — необязательно: если photo не прислали, ничего не меняем
+//        if (photo != null && !photo.isEmpty()) {
+//            if (cropX == null || cropY == null || cropS == null) {
+//                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Crop is required when photo is provided");
+//            }
+//
+//            BufferedImage src = ImageIO.read(photo.getInputStream());
+//            if (src == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported image");
+//
+//            src = ImageUtil.toRgb(src);
+//
+//            // если хочешь: оставлять старое имя или генерить новое. Надёжнее — новое:
+//            String baseName = "c_" + c.getId() + "_" + UUID.randomUUID().toString().substring(0, 16) + ".jpg";
+//
+//            BufferedImage normalized = ImageUtil.resizeMax(src, 1920);
+//            storage.writeJpeg(normalized, storage.originalPath(c.getId(), baseName), 0.82f);
+//
+//            BufferedImage squareCrop = ImageUtil.cropSquareSafe(src, cropX, cropY, cropS);
+//            BufferedImage square512 = ImageUtil.resizeSquare(ImageUtil.toRgb(squareCrop), 512);
+//            storage.writeJpeg(square512, storage.squarePath(c.getId(), baseName), 0.80f);
+//
+//            c.setImage(baseName);
+//        }
+//
+//        repo.save(c);
+//    }
+//
+//    private boolean wouldCreateCycle(Long containerId, Long newParentId, User user) {
+//        // идём вверх от newParent к корню, если встретим containerId — это цикл
+//        Long curId = newParentId;
+//        int guard = 0;
+//        while (curId != null && guard++ < 1000) {
+//            if (curId.equals(containerId)) return true;
+//            Container cur = findByIdOwned(curId, user);
+//            curId = (cur.getParent() == null) ? null : cur.getParent().getId();
+//        }
+//        return false;
+//    }
+
+
 
 //    public Container update(Long id, Container container, Long ownerId) {
 //        Container existing = findById(id);

@@ -14,6 +14,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class AqrApplication {
 
     public static void main(String[] args) {
+        System.out.println("JAVA_TOOL_OPTIONS=" + System.getenv("JAVA_TOOL_OPTIONS"));
+        System.out.println("JAVA_OPTS=" + System.getenv("JAVA_OPTS"));
+        System.getProperties().stringPropertyNames().stream()
+                .filter(k -> k.startsWith("com.sun.management.jmxremote"))
+                .sorted()
+                .forEach(k -> System.out.println(k + "=" + System.getProperty(k)));
         SpringApplication.run(AqrApplication.class, args);
     }
 

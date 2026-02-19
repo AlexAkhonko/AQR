@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Редактирование контейнера</title>
+</head>
+<body>
+
+<h2>Редактирование контейнера</h2>
+
+<form method="post" th:action="@{/containers/{id}(id=${container.id})}" enctype="multipart/form-data">
+  <label>Название</label><br>
+  <input name="name" th:value="${container.name}" style="width:100%"><br><br>
+
+  <label>Родитель</label><br>
+  <select name="parentId" style="width:100%">
+    <option value="">— Нет —</option>
+    <option th:each="opt : ${parentOptions}"
+            th:value="${opt.id}"
+            th:text="${opt.label}"
+            th:selected="${container.parent != null and opt.id == container.parent.id}">
+    </option>
+  </select><br><br>
+
+  <label>Заменить фото (опционально)</label><br>
+  <input id="photo" name="photo" type="file" accept="image/*" capture="environment"><br><br>
+
+  <!-- Переиспользуй твой cropCanvas + JS (как на new), чтобы заполнить cropX/cropY/cropS -->
+  <canvas id="cropCanvas" style="width:100%; border:1px solid #333; touch-action:none; display:none;"></canvas>
+  <input type="hidden" id="cropX" name="cropX">
+  <input type="hidden" id="cropY" name="cropY">
+  <input type="hidden" id="cropS" name="cropS">
+
+  <button type="submit">Сохранить</button>
+</form>
+
+<hr>
+
+<h3>Айтемы</h3>
+
+<div th:if="${#lists.isEmpty(items)}">Пусто</div>
+
+<div th:each="it : ${items}" style="border:1px solid #333;padding:10px;margin:10px 0">
+  <div style="margin-bottom:8px" th:text="${it.text}">Item</div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <form method="post" th:action="@{/containers/{cid}/items/{iid}/detach(cid=${container.id}, iid=${it.id})}">
+      <button type="submit">Удалить</button>
+    </form>
+
+    <form method="post" th:action="@{/containers/{cid}/items/{iid}/rename(cid=${container.id}, iid=${it.id})}">
+      <input name="text" th:value="${it.text}" style="min-width:180px">
+      <button type="submit">Ок</button>
+    </form>
+
+    <form method="post" th:action="@{/containers/{cid}/items/{iid}/move(cid=${container.id}, iid=${it.id})}">
+      <select name="targetContainerId">
+        <option th:each="opt : ${moveTargets}" th:value="${opt.id}" th:text="${opt.label}"></option>
+      </select>
+      <button type="submit">Переместить</button>
+    </form>
+  </div>
+</div>
+
+<!-- Вставь сюда тот же JS кропа, что в container_new.html, он будет работать и тут -->
+</body>
+</html>

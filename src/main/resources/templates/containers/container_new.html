@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Новый контейнер</title>
+</head>
+<body>
+<h2>Новый контейнер</h2>
+
+<form method="post" th:action="@{/containers}" enctype="multipart/form-data">
+    <label>Фото контейнера</label><br>
+    <input id="photo" name="photo" type="file" accept="image/*" capture="environment" required><br><br>
+
+<!--    <img id="preview" style="width:100%;max-height:40vh;object-fit:contain;display:none;" alt="preview"><br><br>-->
+
+    <div style="margin-top:12px">
+        <canvas id="cropCanvas" style="width:100%; border:1px solid #333; touch-action:none; display:none;"></canvas>
+        <div id="hint" style="font-size:12px;opacity:.8;display:none">Перетащи квадрат, чтобы выбрать область для визора</div>
+    </div>
+
+    <!-- Координаты кропа в координатах исходного изображения -->
+    <input type="hidden" id="cropX" name="cropX">
+    <input type="hidden" id="cropY" name="cropY">
+    <input type="hidden" id="cropS" name="cropS">
+
+    <label>Название</label><br>
+    <input name="name" type="text" maxlength="120" required style="width:100%"><br><br>
+
+    <label>Содержимое (по одной вещи в строке)</label><br>
+    <textarea name="contents" rows="8" style="width:100%" placeholder="Напр.:&#10;Кабель USB-C&#10;Зарядка 65W"></textarea><br><br>
+
+    <label>Родительский контейнер (не обязательно)</label><br>
+    <select name="parentId" style="width:100%">
+        <option value="">— Нет —</option>
+        <option th:each="opt : ${parentOptions}"
+                th:value="${opt.id}"
+                th:text="${opt.label}">
+        </option>
+    </select>
+
+    <button type="submit">Сохранить</button>
+</form>
+
+<script>
+
+
+    const input = document.getElementById('photo');
+    const canvas = document.getElementById('cropCanvas');
+    const ctx = canvas.getContext('2d');
+    const hint = document.getElementById('hint');
+
+    const cropXEl = document.getElementById('cropX');
+    const cropYEl = document.getElementById('cropY');
+    const cropSEl = document.getElementById('cropS');
+
+    let img = new Image();
+    let iw=0, ih=0;          // image natural size
+    let scale=1;             // image->canvas scale
+    let ox=0, oy=0;          // image origin on canvas (for fit)
+    let crop = {x:0,y:0,s:0}; // in image coords
+    let dragging=false, dx=0, dy=0;
+
+    let mode = null;       // "move" | "resize"
+    let handle = null;     // "nw"|"ne"|"sw"|"se"
+    let start = null;      // {x,y,s} на момент pointerdown
+    const HANDLE_R = 18;   // радиус зоны “хвата” угла (в CSS px)
+
+    function dist(ax, ay, bx, by) {
+        const dx = ax - bx, dy = ay - by;
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    function cropCanvasRect() {
+        const rx = ox + crop.x*scale;
+        const ry = oy + crop.y*scale;
+        const rs = crop.s*scale;
+        return {rx, ry, rs};
+    }
+
+    function pickHandle(px, py) {
+        const {rx, ry, rs} = cropCanvasRect();
+        const corners = {
+            nw: {x: rx,     y: ry},
+            ne: {x: rx+rs,  y: ry},
+            sw: {x: rx,     y: ry+rs},
+            se: {x: rx+rs,  y: ry+rs},
+        };
+        for (const k of ["nw","ne","sw","se"]) {
+            if (dist(px, py, corners[k].x, corners[k].y) <= HANDLE_R) return k;
+        }
+        return null;
+    }
+
+    function fitCanvas() {
+        // канвас в CSS на 100% ширины, но пиксельный размер выставим по факту
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.floor(rect.width * devicePixelRatio);
+        canvas.height = Math.floor(Math.min(rect.width, window.innerHeight*0.45) * devicePixelRatio);
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+    }
+
+    function computeFit() {
+        const cw = canvas.getBoundingClientRect().width;
+        const ch = canvas.getBoundingClientRect().height;
+        const k = Math.min(cw/iw, ch/ih);
+        scale = k;
+        const dw = iw*k, dh = ih*k;
+        ox = (cw - dw)/2;
+        oy = (ch - dh)/2;
+    }
+
+    function draw() {
+        const cw = canvas.getBoundingClientRect().width;
+        const ch = canvas.getBoundingClientRect().height;
+
+        ctx.clearRect(0,0,cw,ch);
+
+        // 1) Рисуем фото целиком
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0,0,cw,ch);
+        ctx.drawImage(img, ox, oy, iw*scale, ih*scale);
+
+        // crop rect in canvas coords
+        const rx = ox + crop.x*scale;
+        const ry = oy + crop.y*scale;
+        const rs = crop.s*scale;
+
+        // 2) Затемняем всё
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0,0,cw,ch);
+
+        // 3) Поверх затемнения рисуем снова фото, но только в области кропа
+        // source: прямоугольник в исходном изображении (image coords)
+        const sx = crop.x, sy = crop.y, ss = crop.s;
+        // dest: прямоугольник на canvas (canvas coords)
+        ctx.drawImage(img, sx, sy, ss, ss, rx, ry, rs, rs);
+
+        // 4) Рамка
+        ctx.strokeStyle = "#00ff66";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rx, ry, rs, rs);
+
+        // 5) Доп. подсказка: сетка 3x3 (по желанию)
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 1;
+        for (let i=1;i<=2;i++) {
+            ctx.beginPath(); ctx.moveTo(rx + rs*i/3, ry); ctx.lineTo(rx + rs*i/3, ry+rs); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(rx, ry + rs*i/3); ctx.lineTo(rx+rs, ry + rs*i/3); ctx.stroke();
+        }
+
+        function drawHandle(x,y) {
+            ctx.fillStyle = "rgba(0,0,0,0.35)";
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.strokeStyle = "#00ff66";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        const {rx:hrx, ry:hry, rs:hrs} = cropCanvasRect();
+        drawHandle(hrx, hry);           // NW
+        drawHandle(hrx+hrs, hry);       // NE
+        drawHandle(hrx, hry+hrs);       // SW
+        drawHandle(hrx+hrs, hry+hrs);   // SE
+    }
+
+
+    function clampCrop() {
+        crop.s = Math.max(100, Math.min(crop.s, Math.min(iw, ih)));
+        crop.x = Math.max(0, Math.min(crop.x, iw - crop.s));
+        crop.y = Math.max(0, Math.min(crop.y, ih - crop.s));
+    }
+
+    function syncHidden() {
+        cropXEl.value = Math.round(crop.x);
+        cropYEl.value = Math.round(crop.y);
+        cropSEl.value = Math.round(crop.s);
+    }
+
+    function canvasPointToImage(px, py) {
+        const x = (px - ox)/scale;
+        const y = (py - oy)/scale;
+        return {x, y};
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        const h = pickHandle(px, py);
+        if (h) {
+            mode = "resize";
+            handle = h;
+            start = { x: crop.x, y: crop.y, s: crop.s };
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+
+        // move (как было)
+        const p = canvasPointToImage(px, py);
+        if (p.x >= crop.x && p.x <= crop.x+crop.s && p.y >= crop.y && p.y <= crop.y+crop.s) {
+            mode = "move";
+            dragging = true;
+            dx = p.x - crop.x;
+            dy = p.y - crop.y;
+            canvas.setPointerCapture(e.pointerId);
+        }
+    });
+
+
+    canvas.addEventListener('pointermove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        if (mode === "resize" && start) {
+            const p = canvasPointToImage(px, py);
+
+            // Идея: фиксируем противоположный угол, двигаем текущий угол, получаем новый квадрат
+            let ax, ay; // anchor (фиксированный угол)
+            if (handle === "nw") { ax = start.x + start.s; ay = start.y + start.s; }
+            if (handle === "ne") { ax = start.x;           ay = start.y + start.s; }
+            if (handle === "sw") { ax = start.x + start.s; ay = start.y; }
+            if (handle === "se") { ax = start.x;           ay = start.y; }
+
+            // вектор от anchor к текущей точке
+            const vx = p.x - ax;
+            const vy = p.y - ay;
+
+            // квадрат: берём максимальную по модулю компоненту, чтобы сохранять квадратность
+            let s = Math.max(Math.abs(vx), Math.abs(vy));
+
+            // минимальный/максимальный размер
+            const MIN_S = 120;
+            s = Math.max(MIN_S, s);
+            s = Math.min(s, Math.min(iw, ih)); // грубая верхняя граница
+
+            // вычисляем новый x,y в зависимости от хэндла
+            let x = ax, y = ay;
+            if (handle === "nw") { x = ax - s; y = ay - s; }
+            if (handle === "ne") { x = ax;     y = ay - s; }
+            if (handle === "sw") { x = ax - s; y = ay; }
+            if (handle === "se") { x = ax;     y = ay; }
+
+            crop.x = x; crop.y = y; crop.s = s;
+            clampCrop();
+            syncHidden();
+            draw();
+            return;
+        }
+
+        if (mode === "move" && dragging) {
+            const p = canvasPointToImage(px, py);
+            crop.x = p.x - dx;
+            crop.y = p.y - dy;
+            clampCrop();
+            syncHidden();
+            draw();
+        }
+    });
+
+    canvas.addEventListener('pointerup', () => { dragging=false; mode=null; handle=null; start=null; });
+    canvas.addEventListener('pointercancel', () => { dragging=false; mode=null; handle=null; start=null; });
+
+
+    input.addEventListener('change', () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+
+        const url = URL.createObjectURL(f);
+        img = new Image();
+        img.onload = () => {
+            iw = img.naturalWidth; ih = img.naturalHeight;
+
+            canvas.style.display = 'block';
+            hint.style.display = 'block';
+
+            // важно: сначала показать canvas, потом мерить размеры
+            requestAnimationFrame(() => {
+                fitCanvas();
+                computeFit();
+
+                // начальный crop: квадрат по центру
+                crop.s = Math.min(iw, ih) * 0.7;
+                crop.x = (iw - crop.s)/2;
+                crop.y = (ih - crop.s)/2;
+                clampCrop();
+                syncHidden();
+                draw();
+            });
+        };
+        img.src = url;
+    });
+</script>
+</body>
+</html>

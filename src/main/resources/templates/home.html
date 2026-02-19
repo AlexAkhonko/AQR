@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Page</title>
+</head>
+<body>
+<!-- 1. Вывод переменных -->
+<!--<h1 th:text="${message}">Default Title</h1>-->
+
+<!--&lt;!&ndash; 2. Обращение к свойствам объекта &ndash;&gt;-->
+<!--<p th:text="${user.firstName} + ' ' + ${user.lastName}"></p>-->
+<!--&lt;!&ndash; Или так &ndash;&gt;-->
+<!--<p th:text="${user.firstName + ' ' + user.lastName}"></p>-->
+
+<!--&lt;!&ndash; 3. Условные операторы &ndash;&gt;-->
+<!--<div th:if="${user.firstName == 'John'}">-->
+<!--    Welcome John!-->
+<!--</div>-->
+<!--<div th:unless="${user.firstName == 'John'}">-->
+<!--    You're not John-->
+<!--</div>-->
+
+<!--&lt;!&ndash; 4. Циклы &ndash;&gt;-->
+<!--<ul>-->
+<!--    <li th:each="item : ${items}" th:text="${item}"></li>-->
+<!--</ul>-->
+
+<!-- 5. Ссылки -->
+<!--<a th:href="@{/users/{id}(id=${user.id})}">User Profile</a>-->
+<!--<a th:href="@{/users(id=${user.id},action='edit')}">Edit User</a>-->
+
+<!-- 6. Формы -->
+<!--<form th:action="@{/save}" th:object="${user}" method="post">-->
+<!--    <input type="text" th:field="*{login}" />-->
+<!--    <button type="submit">Save</button>-->
+<!--</form>-->
+
+<!-- 7. Встроенные выражения -->
+<!--<p>The name is [[${user.login}]].</p>-->
+
+<!-- 8. Фрагменты шаблонов -->
+<!--<div th:insert="~{fragments/header :: header}"></div>-->
+
+<!-- 9. Подключение статических ресурсов -->
+<!--<link th:href="@{/css/style.css}" rel="stylesheet">-->
+<!--<script th:src="@{/js/script.js}"></script>-->
+<!--<img th:src="@{/images/logo.png}">-->
+</body>
+</html>

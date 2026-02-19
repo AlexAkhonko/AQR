@@ -5,6 +5,7 @@ import org.aqr.service.UserService;
 import org.aqr.utils.JwtRequestFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -58,19 +59,58 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    /**
+     * 1) API цепочка: только /api/**, JWT, stateless, CSRF выключен.
+     */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {  // ✅ Без параметров!
-        return http.csrf(csrf -> csrf.disable())
+    @Order(1)
+    public SecurityFilterChain apiChain(HttpSecurity http) throws Exception {  // ✅ Без параметров!
+        return http
+                .securityMatcher("/api/**")  // ✅ ДОБАВЬ ЭТО ПЕРВЫМ!
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(daoAuthProvider())  // ✅ Spring инжектит
+                .authenticationProvider(daoAuthProvider())
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/**").permitAll()
-//                                .requestMatchers("/swagger-ui/**", "/swagger-ui.html").permitAll()
-//                                .requestMatchers("/v3/api-docs/**").permitAll()
-//                                .requestMatchers("/api/v1/auth/**").permitAll()
-//                       .anyRequest().authenticated()
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    /**
+     * 2) WEB цепочка: всё остальное, formLogin, сессии, CSRF включён.
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain webChain(org.springframework.security.config.annotation.web.builders.HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher("/**")
+                .authenticationProvider(daoAuthProvider())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/login", "/register", "/dashboard").permitAll()
+                        .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/scan", "/images/**").permitAll()  // ✅ Камера + картинки
+                        .requestMatchers("/media/**").authenticated()
+                        .requestMatchers("/containers/**").authenticated()
+                        .requestMatchers("/files/**").authenticated()
+                        .anyRequest().authenticated()
+                )
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .defaultSuccessUrl("/dashboard", true)
+                        .permitAll()
+                )
+                .logout(logout -> logout
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login?logout")
+                )
+                // CSRF НЕ отключаем для web: формы Thymeleaf будут отправлять _csrf.
+                .build();
+
+
+
     }
 }

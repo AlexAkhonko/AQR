@@ -1,9 +1,14 @@
 server:
   port: 8080
   servlet:
-    context-path: /api/v1
+    context-path: /
+  address: 0.0.0.0
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
   datasource:
     url: jdbc:postgresql://localhost:5432/aqr_db
     username: postgres
@@ -17,6 +22,15 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+    encoding: UTF-8
+    servlet:
+      content-type: text/html
+  jmx:
+    enabled: false
 
 qr:
   size: 300
@@ -43,4 +57,8 @@ springdoc:
 jwt:
   secret: myJwtSecretKeyThatIsAtLeast32CharactersLong12345678
   expiration-ms: 86400000  # 24 часа
+
+app:
+  upload-dir: ./uploads
+
 

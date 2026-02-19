@@ -14,11 +14,20 @@ public interface ContainerRepository extends JpaRepository<Container, Long> {
 
     List<Container> findByOwnerIdOrderByIdDesc(Long ownerId);
 
-    @Query("SELECT c FROM Container c WHERE c.parentContainer.id = :parentId AND c.owner.id = :ownerId")
+    @Query("SELECT c FROM Container c WHERE c.parent.id = :parentId AND c.owner.id = :ownerId")
     List<Container> findChildrenByParentIdAndOwner(@Param("parentId") Long parentId, @Param("ownerId") Long ownerId);
 
-    @Query("SELECT c FROM Container c WHERE c.owner.id = :ownerId AND (:parentId IS NULL OR c.parentContainer.id = :parentId)")
+    @Query("SELECT c FROM Container c WHERE c.owner.id = :ownerId AND (:parentId IS NULL OR c.parent = :parentId)")
     List<Container> findByOwnerIdAndParentId(@Param("ownerId") Long ownerId, @Param("parentId") Long parentId);
+
+    @Query("SELECT c FROM Container c WHERE c.owner.id = :ownerId AND c.parent.id IS NULL")
+    List<Container> findRootContainerByOwnerId(@Param("ownerId") Long ownerId);
+
+    @Query("SELECT c FROM Container c WHERE c.owner.id = :ownerId")
+    List<Container> findByOwnerId(@Param("ownerId") Long ownerId);
+
+    //@Query("SELECT c FROM Container c WHERE c.owner.id = :ownerId")
+    Container findByIdAndOwnerId(@Param("id") Long id, @Param("ownerId") Long ownerId);
 
 //    @Query("""
 //        WITH RECURSIVE container_tree AS (
@@ -38,7 +47,7 @@ public interface ContainerRepository extends JpaRepository<Container, Long> {
 //    List<Container> findContainerTree(@Param("rootId") Long rootId, @Param("ownerId") Long ownerId);
 
     @Modifying
-    @Query("UPDATE Container c SET c.parentContainer = null WHERE c.id = :id")
+    @Query("UPDATE Container c SET c.parent = null WHERE c.id = :id")
     void removeParent(@Param("id") Long id);
 }
 

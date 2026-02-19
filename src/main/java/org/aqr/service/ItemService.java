@@ -2,6 +2,7 @@ package org.aqr.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.aqr.entity.Container;
 import org.aqr.entity.Item;
 import org.aqr.entity.User;
 import org.aqr.repository.ItemRepository;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,10 @@ public class ItemService {
     public Page<Item> getMyItems(Long ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         return itemRepository.findByOwnerId(ownerId, pageable);
+    }
+
+    public List<Item> getMyItems(Long ownerId) {
+        return itemRepository.findByOwnerId(ownerId);
     }
 
     /**
@@ -58,7 +65,6 @@ public class ItemService {
      */
     @Transactional
     public Item createItem(Long ownerId, String text) {
-        //log.info("Creating item for user {}: {}", ownerId, text);
 
         Item item = new Item();
         item.setText(text.trim());
@@ -124,6 +130,60 @@ public class ItemService {
                 .map(text -> createItem(ownerId, text))
                 .toList();
     }
+
+    public List<Item> findByContainerId(Long containerId) {
+        return itemRepository.findByContainerId(containerId);
+    }
+
+    public Item save(Item item) {
+        return itemRepository.save(item);
+    }
+
+//    public List<Item> findByContainerOwned(Long containerId, User user) {
+//        return itemRepo.findByOwnerIdAndContainerId(user.getId(), containerId);
+//    }
+//
+//    @Transactional
+//    public void detachFromContainer(User user, Long containerId, Long itemId) {
+//        Item it = itemRepo.findByIdAndOwnerId(itemId, user.getId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+//
+//        if (it.getContainer() == null || !it.getContainer().getId().equals(containerId)) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Item not in this container");
+//        }
+//
+//        it.setContainer(null);
+//        itemRepo.save(it);
+//    }
+//
+//    @Transactional
+//    public void renameOwnedItemInContainer(User user, Long containerId, Long itemId, String text) {
+//        Item it = itemRepo.findByIdAndOwnerId(itemId, user.getId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+//
+//        if (it.getContainer() == null || !it.getContainer().getId().equals(containerId)) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+//        }
+//
+//        it.setText(text.trim());
+//        itemRepo.save(it);
+//    }
+//
+//    @Transactional
+//    public void moveOwnedItem(User user, Long fromContainerId, Long itemId, Long targetContainerId) {
+//        Item it = itemRepo.findByIdAndOwnerId(itemId, user.getId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+//
+//        if (it.getContainer() == null || !it.getContainer().getId().equals(fromContainerId)) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+//        }
+//
+//        Container target = containerRepo.findByIdAndOwnerId(targetContainerId, user.getId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target not found"));
+//
+//        it.setContainer(target);
+//        itemRepo.save(it);
+//    }
 
     /**
      * DTO для статистики

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.AccessDeniedException;
+import java.security.SecureRandom;
 import java.util.List;
 
 @Service
@@ -23,7 +24,17 @@ public class QrCodeService {
 
     @Autowired
     private QrCodeRepository qrCodeRepository;
-    @Autowired private ContainerRepository containerRepository;
+    @Autowired
+    private ContainerRepository containerRepository;
+
+    private static final char[] ALPH = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".toCharArray();
+    private final SecureRandom rnd = new SecureRandom();
+
+    public String newCode5() {
+        char[] out = new char[5];
+        for (int i = 0; i < out.length; i++) out[i] = ALPH[rnd.nextInt(ALPH.length)];
+        return new String(out);
+    }
 
     public byte[] generateQrImage(String text, int width, int height) {
         try {

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title th:text="${parentId != null ? 'Контейнер ' + parentId : 'Мои контейнеры'}">Контейнеры</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; }
+    .breadcrumbs {
+      background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 30px;
+    }
+    .breadcrumb-link { color: #007bff; text-decoration: none; margin-right: 8px; }
+    .breadcrumb-current { font-weight: bold; color: #333; }
+    .content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+
+    /* Контейнеры */
+    .container-card {
+      border: 3px solid #28a745; background: #d4edda;
+      padding: 20px; border-radius: 12px; cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .container-card:hover {
+      transform: translateY(-5px); box-shadow: 0 8px 25px rgba(40,167,69,0.3);
+    }
+    .container-icon { font-size: 48px; display: block; text-align: center; margin-bottom: 10px; }
+    .container-name { font-size: 20px; font-weight: bold; color: #155724; text-align: center; }
+
+    /* Айтиемы */
+    .item-card {
+      border: 2px solid #007bff; background: #cce7ff;
+      padding: 15px; border-radius: 8px;
+    }
+    .item-icon { font-size: 32px; display: block; text-align: center; margin-bottom: 8px; }
+    .item-text { font-size: 16px; color: #004085; word-break: break-word; }
+
+    .add-btn {
+      background: #17a2b8; color: white; padding: 12px 24px;
+      border: none; border-radius: 6px; cursor: pointer;
+      display: block; margin: 20px auto; font-size: 16px;
+    }
+    .back-btn {
+      background: #6c757d; color: white; padding: 10px 20px;
+      border: none; border-radius: 6px; text-decoration: none;
+      display: inline-block; margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+<!-- Breadcrumbs -->
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+        <span th:each="bc, iter : ${breadcrumbs}">
+            <a th:if="${!bc.current}" th:href="${bc.url}" class="breadcrumb-link" th:text="${bc.name}">Крошка</a>
+            <span th:if="${bc.current}" class="breadcrumb-current" th:text="${bc.name}">Текущая</span>
+            <span th:if="${!iter.last}"> → </span>
+        </span>
+</nav>
+
+<!-- Кнопка назад (кроме корня) -->
+<a th:if="${parentId != null}" th:href="@{/containers}" class="back-btn">← Назад к корню</a>
+
+<!-- Список контейнеров и айтемов -->
+<div class="content-grid">
+  <!-- Контейнеры (вверху) -->
+  <div th:each="container : ${containers}"
+       class="container-card"
+       th:onclick="'window.location.href=\'' + @{/containers/{id}(id=${container.id})} + '\''">
+    <div class="container-icon">📦</div>
+    <div class="container-name" th:text="${container.name}">Контейнер</div>
+<!--    <small th:text="${'Внутри: ' + container.childCount + ' контейнеров, ' + container.itemCount + ' вещей'}">Внутри</small>-->
+  </div>
+
+  <!-- Айтиемы (ниже) -->
+  <div th:each="item : ${items}" class="item-card">
+    <div class="item-icon">📝</div>
+    <div class="item-text" th:text="${item.text}">Описание вещи</div>
+    <small th:text="'ID: ' + ${item.id}">ID</small>
+  </div>
+</div>
+
+<!-- Кнопка добавить (если не корень) -->
+<!--<div th:if="${parentId != null}">-->
+<!--  <button class="add-btn" onclick="window.location.href='/containers/{id}/new'(id=${parentId})">-->
+<!--    ➕ Добавить в этот контейнер-->
+<!--  </button>-->
+<!--</div>-->
+
+<div style="margin-top: 40px; text-align: center; color: #6c757d;">
+  <a th:href="@{/dashboard}">← Вернуться в меню</a>
+</div>
+</body>
+</html>

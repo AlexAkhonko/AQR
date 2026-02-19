@@ -1,5 +1,6 @@
 package org.aqr.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -22,10 +23,16 @@ public class Container {
     private String image; // URL изображения контейнера
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_container_id")
-    private Container parentContainer;
+    @JoinColumn(name = "parent_id")
+    private Container parent;
 
-    @OneToMany(mappedBy = "parentContainer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private String name;
+
+    @JsonIgnore  // Если оставишь связи
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
     private List<Container> childContainers = new ArrayList<>();
+
+    @Column(name = "qr_code", length = 100)
+    private String qrCode;
 }
 
