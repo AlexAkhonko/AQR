@@ -19,8 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Controller
 @RequiredArgsConstructor
@@ -57,7 +56,6 @@ public class ContainersController {
         String login = auth.getName();
         Long userId = userService.findByLogin(login).getId();
 
-        Container parent = containerService.findById(parentId);
         List<Container> childContainers = containerService.findChildren(parentId, userId);
         List<Item> items = itemService.findByContainerId(parentId);
 
@@ -73,11 +71,35 @@ public class ContainersController {
     }
 
     private List<Breadcrumb> buildBreadcrumbs(Long currentId) {
-        // TODO: рекурсивно строить путь от корня до currentId
-        return List.of(
-                new Breadcrumb("Мои контейнеры", "/containers", false),
-                new Breadcrumb("Контейнер #" + currentId, "", true)
-        );
+        // Идём от текущего контейнера вверх по parent до корня, потом разворачиваем список. [web:417]
+        List<Breadcrumb> crumbs = new ArrayList<>();
+        crumbs.add(new Breadcrumb("Мои контейнеры", "/containers", false));
+
+        if (currentId == null) {
+            return crumbs;
+        }
+
+        // защита от циклов/битых данных: guard + visited. [web:258]
+        Set<Long> visited = new HashSet<>();
+        Deque<Container> stack = new ArrayDeque<>();
+
+        Container cur = containerService.findById(currentId); // или repo.findById(...)
+        int guard = 0;
+
+        while (cur != null && cur.getId() != null && guard++ < 1000) {
+            if (!visited.add(cur.getId())) break; // цикл
+            stack.push(cur); // чтобы потом вывести от корня к листу
+            cur = cur.getParent(); // LAZY ок, но должен быть open-session-in-view или transactional
+        }
+
+        while (!stack.isEmpty()) {
+            Container c = stack.pop();
+            boolean isLast = stack.isEmpty();
+            String url = isLast ? "" : ("/containers/" + c.getId()); // подстрой под твой роут просмотра контейнера
+            crumbs.add(new Breadcrumb(c.getName(), url, isLast));
+        }
+
+        return crumbs;
     }
 
     @GetMapping("/new")
