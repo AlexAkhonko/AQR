@@ -7,12 +7,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface ContainerRepository extends JpaRepository<Container, Long> {
 
     List<Container> findByOwnerIdOrderByIdDesc(Long ownerId);
+
+    List<Container> findByOwnerIdAndIdIn(Long ownerId, Collection<Long> ids);
 
     @Query("SELECT c FROM Container c WHERE c.parent.id = :parentId AND c.owner.id = :ownerId")
     List<Container> findChildrenByParentIdAndOwner(@Param("parentId") Long parentId, @Param("ownerId") Long ownerId);

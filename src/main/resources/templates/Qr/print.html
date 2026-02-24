@@ -1,0 +1,17 @@
+<form method="post" th:action="@{/export/pdf}">
+    <div th:each="c : ${containers}">
+        <label>
+            <input type="checkbox" name="containerIds" th:value="${c.id}">
+            <span th:text="${c.name}"></span>
+        </label>
+    </div>
+
+    <label>Размер (мм)</label>
+    <select name="sizeMm">
+        <option th:each="s: ${sizes}" th:value="${s}" th:text="${s}"></option>
+    </select>
+
+    <button type="submit" formaction="/qr/export/links">Показать ссылки на PNG</button>
+    <button type="submit" formaction="/qr/export/pdf">Скачать PDF</button>
+</form>
+

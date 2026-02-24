@@ -214,6 +214,10 @@ public class ContainerService {
         return new ContainerListPage(userId, parentId, childContainers, items, breadcrumbs);
     }
 
+    public List<Container> findOwnedByIds(Long ownerId, List<Long> containerIds) {
+        return containerRepository.findByOwnerIdAndIdIn(ownerId, containerIds);
+    }
+
 //    @Transactional
 //    public void updateContainer(User user, Long id, String name, Long parentId,
 //                                MultipartFile photo, Integer cropX, Integer cropY, Integer cropS) throws Exception {

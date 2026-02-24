@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR коды</title>
+</head>
+<body>
+
+<h2>Ссылки на PNG</h2>
+<div style="opacity:.7">Размер: <span th:text="${sizeMm}">50</span> мм</div>
+
+<div th:if="${#lists.isEmpty(links)}">Ничего не выбрано</div>
+
+<ul>
+  <li th:each="l : ${links}">
+    <a th:href="@{|/qr/container/${l.id}.png?sizeMm=${sizeMm}|}"
+       th:text="${l.name}">Container</a>
+  </li>
+</ul>
+
+<a href="/qr/print">← Назад</a>
+</body>
+</html>

@@ -6,7 +6,6 @@ import org.aqr.utils.JwtRequestFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -95,6 +94,7 @@ public class SecurityConfig {
                         .requestMatchers("/scan", "/images/**").permitAll()  // ✅ Камера + картинки
                         .requestMatchers("/media/**").authenticated()
                         .requestMatchers("/containers/**").authenticated()
+                        .requestMatchers("/qr/**").permitAll()
                         .requestMatchers("/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
