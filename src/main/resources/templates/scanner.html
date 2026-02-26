@@ -57,12 +57,22 @@
     <div id="overlay"></div>
 </div>
 
+<div style="margin-top:8px">
+    <label for="scaleSlider" style="display:block; font-size:12px; opacity:.85;">
+        Масштаб картинок: <span id="scaleVal">2.2</span>x
+    </label>
+    <input id="scaleSlider" type="range"
+           min="0.8" max="4.0" step="0.1" value="2.2"
+           style="width:100%">
+</div>
+
 <div id="list">
     <div id="status">Загрузка картинок…</div>
     <div id="results"></div>
     <button id="startBtn">Начать</button>
     <button id="stopBtn" disabled>Стоп</button>
 </div>
+
 
 <script th:inline="javascript">
     /*<![CDATA[*/
@@ -82,15 +92,23 @@
     const resultsEl = document.getElementById('results');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
+    const scaleSlider = document.getElementById('scaleSlider');
+    const scaleVal = document.getElementById('scaleVal');
 
     let stream = null;
     let running = false;
     let detector = null;
+    let imgScaleK = parseFloat(scaleSlider.value); // будет влиять на размер оверлеев
 
     // Кеш картинок: ключ = qrCode, значение = HTMLImageElement
     let images = {};
     const overlayCache = new Map(); // rawValue -> {boxEl, imageDiv, imgEl, lastSeen}
     const OVERLAY_TTL_MS = 1200;     // 500–1200 подбери
+
+    scaleSlider.addEventListener('input', () => {
+        imgScaleK = parseFloat(scaleSlider.value);
+        scaleVal.textContent = imgScaleK.toFixed(1);
+    });
 
     async function preloadImages() {
         statusEl.textContent = 'Предзагрузка картинок…';
@@ -238,6 +256,9 @@
 
         const now = Date.now();
 
+        const placed = []; // уже размещённые прямоугольники картинок: {l,t,r,b}
+        const PAD = 6;     // зазор между картинками
+
         barcodes.forEach(code => {
             const bb = code.boundingBox;
             if (!bb) return;
@@ -255,18 +276,48 @@
             o.boxEl.style.height = (bb.height * scaleY) + 'px';
 
             // Картинка
+            // Картинка
             const imgElement = getImageForQR(rawValue);
             if (imgElement) {
-                o.imageDiv.style.width = (bb.width * scaleX) + 'px';
-                o.imageDiv.style.height = (bb.height * scaleY) + 'px';
-
                 const centerX = (bb.x + bb.width / 2) * scaleX;
                 const centerY = (bb.y + bb.height / 2) * scaleY;
-                o.imageDiv.style.left = centerX + 'px';
-                o.imageDiv.style.top = centerY + 'px';
 
-                if (o.imgEl.src !== imgElement.src) o.imgEl.src = imgElement.src;
-                o.imageDiv.style.display = 'block';
+                const base = Math.max(bb.width * scaleX, bb.height * scaleY); // размер QR на экране [web:656]
+                const MIN = 72;    // минимум, чтобы далеко не было микроскопическим
+                const MAX = 240;   // максимум, чтобы не занимало весь экран
+                const K = 2.2;     // насколько больше QR хотим картинку
+
+                //let s = Math.max(MIN, Math.min(MAX, base * K));
+                let s = Math.max(MIN, Math.min(MAX, base * imgScaleK));
+
+                function intersectsAny(rect) {
+                    return placed.some(p =>
+                        !(rect.r + PAD <= p.l || rect.l >= p.r + PAD || rect.b + PAD <= p.t || rect.t >= p.b + PAD)
+                    );
+                }
+
+                // подбираем размер, чтобы не пересечься
+                let rect = null;
+                for (let i = 0; i < 12; i++) {
+                    rect = { l: centerX - s/2, t: centerY - s/2, r: centerX + s/2, b: centerY + s/2 };
+                    if (!intersectsAny(rect)) break;
+                    s *= 0.88;
+                }
+
+                // если даже минимальный размер пересекается — прячем (или оставь MIN)
+                if (rect && !intersectsAny(rect) && s >= 48) {
+                    placed.push(rect);
+
+                    o.imageDiv.style.width = s + 'px';
+                    o.imageDiv.style.height = s + 'px';
+                    o.imageDiv.style.left = centerX + 'px';
+                    o.imageDiv.style.top = centerY + 'px';
+
+                    if (o.imgEl.src !== imgElement.src) o.imgEl.src = imgElement.src;
+                    o.imageDiv.style.display = 'block';
+                } else {
+                    o.imageDiv.style.display = 'none';
+                }
             } else {
                 o.imageDiv.style.display = 'none';
             }
